@@ -10,12 +10,33 @@ const gui = new dat.GUI({
   width: 300,
 });
 const debugObject = {
-  randomWalkType: "",
+  randomWalkType: "simulateCoinToss",
+  showDistribution: false,
+  weightTowardsPositiveSide: false,
+  restartSimulation: () => {
+    currentTrailLength = 0;
+    for (let i = 0; i < choiceCounts.length; i++) {
+      choiceCounts[i] = 0;
+    }
+    for (let i = 0; i < bars.length; i++) {
+      bars[i].scale.y = 0;
+      bars[i].position.y = 0;
+    }
+    particleMesh.position.set(0, 0, 0);
+    debugObject.restart = false;
+  },
+  foodAttractionForce: 0.1,
 };
+
+const foodAttractionController = gui
+  .add(debugObject, "foodAttractionForce", 0, 1)
+  .name("Food Attraction Force");
+
+foodAttractionController.hide();
 
 const bloomParams = {
   threshold: 0.1,
-  strength: 1.5,
+  strength: 0.5,
   radius: 1,
 };
 gui.add(bloomParams, "threshold", 0, 1).onChange((value) => {
@@ -30,16 +51,40 @@ gui.add(bloomParams, "radius", 0, 1).onChange((value) => {
 
 gui
   .add(debugObject, "randomWalkType")
-  .options(["simpleRandom", "multiAxisRandom"])
+  .options(["simulateCoinToss", "modifiedCoinToss", "levysFlight"])
   .onChange((value) => {
-    if (value === "simpleRandom") {
-      randomWalk = simpleRandom;
-    } else if (value === "multiAxisRandom") {
-      randomWalk = multiAxisRandom;
+    if (value === "simulateCoinToss") {
+      randomWalk = simulateCoinToss;
+    } else if (value === "modifiedCoinToss") {
+      randomWalk = modifiedCoinToss;
+    }
+    if (value === "levysFlight") {
+      randomWalk = levysFlight;
     } else {
-      randomWalk = simpleRandom;
+      randomWalk = simulateCoinToss;
+    }
+
+    if (value === "levysFlight") {
+      foodAttractionController.show();
+      foodMesh.visible = true;
+    } else {
+      foodAttractionController.hide();
+      foodMesh.visible = false;
     }
   });
+gui.add(debugObject, "showDistribution").onChange((value) => {
+  if (value) {
+    for (let i = 0; i < bars.length; i++) {
+      bars[i].visible = true;
+    }
+  } else {
+    for (let i = 0; i < bars.length; i++) {
+      bars[i].visible = false;
+    }
+  }
+});
+gui.add(debugObject, "weightTowardsPositiveSide");
+gui.add(debugObject, "restartSimulation");
 
 // Canvas
 const canvas = document.querySelector("canvas.webgl");
@@ -50,7 +95,11 @@ scene.background = new THREE.Color(0x000000);
 
 //Distribution
 const barGeometry = new THREE.BoxGeometry(1, 1, 1);
-const barMaterial = new THREE.MeshBasicMaterial({ color: 0x00aaff });
+const barMaterial = new THREE.MeshBasicMaterial({
+  color: 0xffaa00,
+  transparent: true,
+  opacity: 0.5,
+});
 const barMesh = new THREE.Mesh(barGeometry, barMaterial);
 
 // Particle Color & Material
@@ -106,7 +155,7 @@ const bloomPass = new UnrealBloomPass(
   0.85
 );
 bloomPass.threshold = 0.1;
-bloomPass.strength = 1.5;
+bloomPass.strength = 0.5;
 bloomPass.radius = 1;
 bloomPass.renderToScreen = true;
 
@@ -149,72 +198,115 @@ scene.add(trailLine);
 
 const choiceCounts = new Array(7).fill(0);
 
-// const bars = [];
-// for (let i = 0; i < 7; i++) {
-//   const bar = barMesh.clone();
-//   bar.position.set(i - 3, 0, -5);
-//   scene.add(bar);
-//   bars.push(bar);
-// }
+const bars = [];
+for (let i = 0; i < 8; i++) {
+  const bar = barMesh.clone();
+  bar.position.set(i - 3, 0, -5);
+  bar.visible = false;
+  scene.add(bar);
+  bars.push(bar);
+}
+//FIND FOOD
 
-const simpleRandom = () => {
-  let choice = Math.floor(Math.random() * 7) + 1;
+const foodMaterial = new THREE.MeshPhongMaterial({
+  color: new THREE.Color(0xff0000),
+  emissive: new THREE.Color(0xff0000),
+  shininess: 100,
+  specular: new THREE.Color(0xffaaff),
+});
+
+const foodMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(0.1, 32, 32),
+  foodMaterial
+);
+foodMesh.position.set(
+  Math.random() * 10 - 5,
+  Math.random() * 10 - 5,
+  Math.random() * 10 - 5
+);
+scene.add(foodMesh);
+
+foodMesh.visible = false;
+
+// //
+
+const simulateCoinToss = () => {
+  let choice = debugObject.weightTowardsPositiveSide
+    ? Math.floor(Math.random() * 9)
+    : Math.floor(Math.random() * 8);
   if (currentTrailLength < maxTrailLength) {
-    const offset = currentTrailLength * 3;
+    if (debugObject.randomWalkType === "levysFlight") {
+      levysFlight();
+    } else {
+      const offset = currentTrailLength * 3;
 
-    trailPositions[offset] = particleMesh.position.x;
-    trailPositions[offset + 1] = particleMesh.position.y;
-    trailPositions[offset + 2] = particleMesh.position.z;
+      trailPositions[offset] = particleMesh.position.x - 0.5;
+      trailPositions[offset + 1] = particleMesh.position.y - 0.5;
+      trailPositions[offset + 2] = particleMesh.position.z - 0.5;
 
-    // if (choice > 6) {
-    //   choice = 1;
-    // }
-    // choiceCounts[choice - 1]++;
+      // if (choice > 6) {
+      //   choice = 1;
+      // }
+      if (choice === 8) {
+        choice = 1;
+      }
+      choiceCounts[choice - 1]++;
 
-    // const maxCount = Math.max(...choiceCounts);
-    // for (let i = 0; i < bars.length; i++) {
-    //   bars[i].scale.y = choiceCounts[i] / maxCount; // Normalize to the max count
-    //   bars[i].position.y = bars[i].scale.y / 2;
-    // }
+      const maxCount = Math.max(...choiceCounts);
+      for (let i = 0; i < bars.length; i++) {
+        bars[i].scale.y = choiceCounts[i] / maxCount;
+        bars[i].position.y = bars[i].scale.y / 2;
+      }
 
-    switch (choice) {
-      case 1:
-        particleMesh.position.x += 0.05;
-        break;
-      case 2:
-        particleMesh.position.x -= 0.05;
-        break;
-      case 3:
-        particleMesh.position.y += 0.05;
-        break;
-      case 4:
-        particleMesh.position.y -= 0.05;
-        break;
-      case 5:
-        particleMesh.position.z += 0.05;
-        break;
-      case 6:
-        particleMesh.position.z -= 0.05;
-        break;
-      default:
-        particleMesh.position.x += 0.05;
-        break;
+      switch (choice) {
+        case 0: // HHH
+        case 8: //Biased
+          particleMesh.position.x += 0.05;
+          particleMesh.position.y += 0.05;
+          particleMesh.position.z += 0.05;
+          break;
+        case 1: // HHT
+          particleMesh.position.x += 0.05;
+          particleMesh.position.y += 0.05;
+          particleMesh.position.z -= 0.05;
+          break;
+        case 2: // HTH
+          particleMesh.position.x += 0.05;
+          particleMesh.position.y -= 0.05;
+          particleMesh.position.z += 0.05;
+          break;
+        case 3: // HTT
+          particleMesh.position.x += 0.05;
+          particleMesh.position.y -= 0.05;
+          particleMesh.position.z -= 0.05;
+          break;
+        case 4: // THH
+          particleMesh.position.x -= 0.05;
+          particleMesh.position.y += 0.05;
+          particleMesh.position.z += 0.05;
+          break;
+        case 5: // THT
+          particleMesh.position.x -= 0.05;
+          particleMesh.position.y += 0.05;
+          particleMesh.position.z -= 0.05;
+          break;
+        case 6: // TTH
+          particleMesh.position.x -= 0.05;
+          particleMesh.position.y -= 0.05;
+          particleMesh.position.z += 0.05;
+          break;
+        case 7: // TTT
+          particleMesh.position.x -= 0.05;
+          particleMesh.position.y -= 0.05;
+          particleMesh.position.z -= 0.05;
+          break;
+      }
+      updateTrail();
     }
-
-    // Update the trail positions again after making changes
-    trailPositions[offset] = particleMesh.position.x;
-    trailPositions[offset + 1] = particleMesh.position.y;
-    trailPositions[offset + 2] = particleMesh.position.z;
-
-    currentTrailLength++;
-
-    // Update draw range and flag the geometry as needing an update
-    trailGeometry.setDrawRange(0, currentTrailLength);
-    trailGeometry.attributes.position.needsUpdate = true;
   }
 };
 
-const multiAxisRandom = () => {
+const modifiedCoinToss = () => {
   if (currentTrailLength < maxTrailLength) {
     // Set the latest position (changing all three axes)
     particleMesh.position.x += (Math.random() - 0.5) * 0.1;
@@ -233,12 +325,63 @@ const multiAxisRandom = () => {
   }
 };
 
-let randomWalk = simpleRandom;
+const levyFlightStepSize = () => {
+  const random = Math.random();
+  const alpha = 2;
+
+  return Math.pow(random, -1 / alpha);
+};
+
+const updateTrail = () => {
+  const offset = currentTrailLength * 3;
+
+  trailPositions[offset] = particleMesh.position.x;
+  trailPositions[offset + 1] = particleMesh.position.y;
+  trailPositions[offset + 2] = particleMesh.position.z;
+
+  currentTrailLength++;
+  trailGeometry.setDrawRange(0, currentTrailLength);
+  trailGeometry.attributes.position.needsUpdate = true;
+};
+
+const levysFlight = () => {
+  const direction = new THREE.Vector3(
+    Math.random() * 2 - 1,
+    Math.random() * 2 - 1,
+    Math.random() * 2 - 1
+  ).normalize();
+
+  const stepSize = levyFlightStepSize();
+
+  particleMesh.position.add(direction.multiplyScalar(stepSize));
+
+  const directionToFood = new THREE.Vector3()
+    .subVectors(foodMesh.position, particleMesh.position)
+    .normalize();
+  const foodAttractionForce = debugObject.foodAttractionForce;
+  particleMesh.position.add(
+    directionToFood.multiplyScalar(foodAttractionForce)
+  );
+
+  updateTrail();
+};
+let randomWalk = simulateCoinToss;
+
+let distanceBetweenParticleAndFood = particleMesh.position.distanceTo(
+  foodMesh.position
+);
+
+let continueAnimation = true;
+if (distanceBetweenParticleAndFood <= 0.02 + 0.1) {
+  foodMesh.material.color.set(0x00ff00);
+  continueAnimation = false;
+}
 
 // Animation loop
 let currentTrailLength = 0;
 const clock = new THREE.Clock();
 const tick = () => {
+  if (!continueAnimation) return;
   randomWalk();
 
   const elapsedTime = clock.getElapsedTime();
