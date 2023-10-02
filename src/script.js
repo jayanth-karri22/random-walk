@@ -4,6 +4,7 @@ import * as dat from "lil-gui";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { Noise } from "noisejs";
 
 THREE.ColorManagement.enabled = false;
 const gui = new dat.GUI({
@@ -26,6 +27,7 @@ const debugObject = {
     debugObject.restart = false;
   },
   foodAttractionForce: 0.1,
+  usePerlinNoise: false,
 };
 
 const foodAttractionController = gui
@@ -85,6 +87,7 @@ gui.add(debugObject, "showDistribution").onChange((value) => {
 });
 gui.add(debugObject, "weightTowardsPositiveSide");
 gui.add(debugObject, "restartSimulation");
+gui.add(debugObject, "usePerlinNoise").name("Use Perlin Noise");
 
 // Canvas
 const canvas = document.querySelector("canvas.webgl");
@@ -143,7 +146,7 @@ const camera = new THREE.PerspectiveCamera(
   0.1,
   100
 );
-camera.position.set(1, 1, 1);
+camera.position.set(1, 5, 5);
 scene.add(camera);
 
 // Bloom effect setup
@@ -230,10 +233,25 @@ foodMesh.visible = false;
 
 // //
 
+const noise = new Noise(Math.random());
+let perlinOffset = 0;
+let perlinX = Math.random() * 1000;
+let perlinY = Math.random() * 1000;
+let perlinZ = Math.random() * 1000;
+
 const simulateCoinToss = () => {
-  let choice = debugObject.weightTowardsPositiveSide
-    ? Math.floor(Math.random() * 9)
-    : Math.floor(Math.random() * 8);
+  let choice;
+  if (debugObject.usePerlinNoise) {
+    const perlinValue = noise.simplex3(perlinX, perlinY, perlinZ);
+    perlinX += (Math.random() - 0.5) * 0.2;
+    perlinY += (Math.random() - 0.5) * 0.2;
+    perlinZ += (Math.random() - 0.5) * 0.2;
+    choice = Math.floor((perlinValue + 1) * 4);
+  } else {
+    choice = debugObject.weightTowardsPositiveSide
+      ? Math.floor(Math.random() * 9)
+      : Math.floor(Math.random() * 8);
+  }
   if (currentTrailLength < maxTrailLength) {
     if (debugObject.randomWalkType === "levysFlight") {
       levysFlight();
@@ -345,25 +363,51 @@ const updateTrail = () => {
 };
 
 const levysFlight = () => {
-  const direction = new THREE.Vector3(
-    Math.random() * 2 - 1,
-    Math.random() * 2 - 1,
-    Math.random() * 2 - 1
-  ).normalize();
-
-  const stepSize = levyFlightStepSize();
-
-  particleMesh.position.add(direction.multiplyScalar(stepSize));
-
   const directionToFood = new THREE.Vector3()
     .subVectors(foodMesh.position, particleMesh.position)
     .normalize();
+
+  if (debugObject.usePerlinNoise) {
+    const perturbation = new THREE.Vector3(
+      noise.simplex3(perlinX, perlinY, perlinZ),
+      noise.simplex3(perlinY, perlinZ, perlinX),
+      noise.simplex3(perlinZ, perlinX, perlinY)
+    ).normalize();
+
+    const noiseInfluence = 0.5;
+    const flightLength = 0.05;
+    const magnitude = perturbation.length();
+    const combinedDirection = new THREE.Vector3()
+      .addVectors(
+        directionToFood.multiplyScalar(1 - noiseInfluence),
+        perturbation.multiplyScalar(noiseInfluence)
+      )
+      .normalize();
+
+    combinedDirection.normalize().multiplyScalar(flightLength * magnitude);
+    particleMesh.position.add(combinedDirection);
+
+    perlinX += (Math.random() - 0.5) * 0.2;
+    perlinY += (Math.random() - 0.5) * 0.2;
+    perlinZ += (Math.random() - 0.5) * 0.2;
+  } else {
+    const direction = new THREE.Vector3(
+      Math.random() * 2 - 1,
+      Math.random() * 2 - 1,
+      Math.random() * 2 - 1
+    ).normalize();
+
+    const stepSize = levyFlightStepSize();
+
+    particleMesh.position.add(direction.multiplyScalar(stepSize));
+  }
   const foodAttractionForce = debugObject.foodAttractionForce;
   particleMesh.position.add(
     directionToFood.multiplyScalar(foodAttractionForce)
   );
-
   updateTrail();
+  camera.lookAt(foodMesh.position);
+  camera.updateProjectionMatrix();
 };
 let randomWalk = simulateCoinToss;
 
