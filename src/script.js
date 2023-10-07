@@ -325,11 +325,54 @@ const simulateCoinToss = () => {
 };
 
 const modifiedCoinToss = () => {
+  let choice;
+  choice = debugObject.weightTowardsPositiveSide
+    ? Math.floor(Math.random() * 9)
+    : Math.floor(Math.random() * 8);
   if (currentTrailLength < maxTrailLength) {
-    // Set the latest position (changing all three axes)
-    particleMesh.position.x += (Math.random() - 0.5) * 0.1;
-    particleMesh.position.y += (Math.random() - 0.5) * 0.1;
-    particleMesh.position.z += (Math.random() - 0.5) * 0.1;
+    switch (choice) {
+      case 0: // HHH
+      case 8: //Biased
+        particleMesh.position.x += (Math.random() - 0.5) * 0.1;
+        particleMesh.position.y += (Math.random() - 0.5) * 0.1;
+        particleMesh.position.z += (Math.random() - 0.5) * 0.1;
+        break;
+      case 1: // HHT
+        particleMesh.position.x += (Math.random() - 0.5) * 0.1;
+        particleMesh.position.y += (Math.random() - 0.5) * 0.1;
+        particleMesh.position.z -= (Math.random() - 0.5) * 0.1;
+        break;
+      case 2: // HTH
+        particleMesh.position.x += (Math.random() - 0.5) * 0.1;
+        particleMesh.position.y -= (Math.random() - 0.5) * 0.1;
+        particleMesh.position.z += (Math.random() - 0.5) * 0.1;
+        break;
+      case 3: // HTT
+        particleMesh.position.x += (Math.random() - 0.5) * 0.1;
+        particleMesh.position.y -= (Math.random() - 0.5) * 0.1;
+        particleMesh.position.z -= (Math.random() - 0.5) * 0.1;
+        break;
+      case 4: // THH
+        particleMesh.position.x -= (Math.random() - 0.5) * 0.1;
+        particleMesh.position.y += (Math.random() - 0.5) * 0.1;
+        particleMesh.position.z += (Math.random() - 0.5) * 0.1;
+        break;
+      case 5: // THT
+        particleMesh.position.x -= (Math.random() - 0.5) * 0.1;
+        particleMesh.position.y += (Math.random() - 0.5) * 0.1;
+        particleMesh.position.z -= (Math.random() - 0.5) * 0.1;
+        break;
+      case 6: // TTH
+        particleMesh.position.x -= (Math.random() - 0.5) * 0.1;
+        particleMesh.position.y -= (Math.random() - 0.5) * 0.1;
+        particleMesh.position.z += (Math.random() - 0.5) * 0.1;
+        break;
+      case 7: // TTT
+        particleMesh.position.x -= (Math.random() - 0.5) * 0.1;
+        particleMesh.position.y -= (Math.random() - 0.5) * 0.1;
+        particleMesh.position.z -= (Math.random() - 0.5) * 0.1;
+        break;
+    }
     const offset = currentTrailLength * 3;
     trailPositions[offset] = particleMesh.position.x;
     trailPositions[offset + 1] = particleMesh.position.y;
